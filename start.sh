@@ -25,8 +25,7 @@ mysqld \
   --bind-address=127.0.0.1 \
   --skip-name-resolve \
   --skip-host-cache \
-  --log-error=/tmp/mysql.err \
-  &
+  --log-error=/tmp/mysql.err &
 
 # Esperar a MariaDB
 for i in {1..60}; do
@@ -44,13 +43,12 @@ GRANT ALL PRIVILEGES ON openboxes.* TO 'openboxes'@'127.0.0.1';
 FLUSH PRIVILEGES;
 SQL
 
-# --- Tomcat en 8080 ---
-cat > "${CATALINA_HOME}/conf/server.xml" <<'EOF'
+# --- Tomcat escuchando DIRECTAMENTE en $PORT ---
+cat > "${CATALINA_HOME}/conf/server.xml" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <Server port="8005" shutdown="SHUTDOWN">
   <Service name="Catalina">
-    <Connector address="0.0.0.0" port="8080"
-               protocol="org.apache.coyote.http11.Http11NioProtocol"
+    <Connector address="0.0.0.0" port="${PORT}" protocol="HTTP/1.1"
                connectionTimeout="20000" redirectPort="8443" />
     <Engine name="Catalina" defaultHost="localhost">
       <Host name="localhost" appBase="webapps" unpackWARs="true" autoDeploy="true"/>
@@ -59,43 +57,13 @@ cat > "${CATALINA_HOME}/conf/server.xml" <<'EOF'
 </Server>
 EOF
 
-# --- Placeholder HTTP 200 inmediato en $PORT ---
-BODY="OpenBoxes se está iniciando...\n"
-# Construimos una respuesta HTTP válida con CRLF
-printf 'HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nConnection: close\r\nContent-Length: %d\r\n\r\n%s' "${#BODY}" "$BODY" \
-  > /tmp/placeholder.http
+# Página mínima para que Render vea 200 OK inmediato
+mkdir -p /usr/local/tomcat/webapps/ROOT
+printf 'OK\n' > /usr/local/tomcat/webapps/ROOT/index.html
 
-# Servir la respuesta estática en $PORT (sin comillas problemáticas)
-socat TCP-LISTEN:${PORT},fork,reuseaddr OPEN:/tmp/placeholder.http,rdonly &
-PLACEHOLDER_PID=$!
-echo "[start] placeholder PID=${PLACEHOLDER_PID} en 0.0.0.0:${PORT}"
+# Memoria moderada (ajusta si hace falta)
+export CATALINA_OPTS="-Xms256m -Xmx768m -XX:+UseG1GC -Djava.awt.headless=true"
 
-# --- Arrancar Tomcat en foreground ---
-export CATALINA_OPTS="${CATALINA_OPTS:-} -Xms512m -Xmx768m -XX:+UseG1GC -Djava.awt.headless=true -Djava.net.preferIPv4Stack=true"
-echo "[start] Arrancando Tomcat en 8080 ..."
-/usr/local/tomcat/bin/catalina.sh start
-
-# Esperar a que Tomcat responda en 8080
-echo "[start] Esperando a Tomcat (http://127.0.0.1:8080/)..."
-READY=0
-for i in {1..180}; do
-  if curl -sSf -o /dev/null http://127.0.0.1:8080/; then READY=1; break; fi
-  sleep 2
-done
-
-if [ "$READY" -ne 1 ]; then
-  echo "[start] Tomcat no respondió a tiempo. Dejando placeholder indefinido."
-  # Mantener proceso principal vivo
-  exec tail -f /dev/null
-fi
-
-# Tomcat listo: cambiar de placeholder a proxy
-echo "[start] Tomcat responde. Cambiando a proxy en ${PORT}..."
-kill "${PLACEHOLDER_PID}" || true
-sleep 0.5
-socat TCP-LISTEN:${PORT},fork,reuseaddr TCP:127.0.0.1:8080 &
-PROXY_PID=$!
-echo "[start] proxy socat PID=${PROXY_PID} (0.0.0.0:${PORT} -> 127.0.0.1:8080)"
-
-# Poner Tomcat en foreground (proceso principal)
+echo "[start] Arrancando Tomcat en ${PORT} ..."
+# IMPORTANTE: un único proceso en foreground, sin socat, sin curl, sin 'start'
 exec /usr/local/tomcat/bin/catalina.sh run
