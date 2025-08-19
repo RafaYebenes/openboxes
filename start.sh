@@ -18,7 +18,7 @@ if [ ! -d "/var/lib/mysql/mysql" ]; then
   mariadb-install-db --user=mysql --datadir=/var/lib/mysql --skip-test-db >/dev/null
 fi
 
-# --- MariaDB: arrancar (log a /tmp para evitar permisos) ---
+# --- MariaDB: arrancar ---
 echo "[start] Lanzando mysqld..."
 mysqld \
   --user=mysql \
@@ -38,7 +38,7 @@ for i in {1..60}; do
   sleep 2
 done
 
-# --- Bootstrap DB/usuario (por socket) ---
+# --- Bootstrap DB/usuario ---
 echo "[start] Creando DB/usuario si faltan..."
 mysql --socket="${MYSQL_SOCK}" -uroot <<SQL
 CREATE DATABASE IF NOT EXISTS openboxes DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -49,12 +49,12 @@ GRANT ALL PRIVILEGES ON openboxes.* TO 'openboxes'@'127.0.0.1';
 FLUSH PRIVILEGES;
 SQL
 
-# --- Tomcat: forzar a 8080 (interno) ---
+# --- Tomcat: atarlo a 0.0.0.0:$PORT (sin socat) ---
 cat > "${CATALINA_HOME}/conf/server.xml" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <Server port="8005" shutdown="SHUTDOWN">
   <Service name="Catalina">
-    <Connector address="0.0.0.0" port="8080" protocol="HTTP/1.1"
+    <Connector address="0.0.0.0" port="${PORT}" protocol="HTTP/1.1"
                connectionTimeout="20000" redirectPort="8443" />
     <Engine name="Catalina" defaultHost="localhost">
       <Host name="localhost" appBase="webapps" unpackWARs="true" autoDeploy="true"/>
@@ -63,62 +63,8 @@ cat > "${CATALINA_HOME}/conf/server.xml" <<EOF
 </Server>
 EOF
 
-# --- Abrir YA el puerto que Render espera con un proxy a 8080 ---
-# --- Tomcat: forzar a 8080 (interno) ---
-cat > "${CATALINA_HOME}/conf/server.xml" <<EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<Server port="8005" shutdown="SHUTDOWN">
-  <Service name="Catalina">
-    <Connector address="0.0.0.0" port="8080" protocol="HTTP/1.1"
-               connectionTimeout="20000" redirectPort="8443" />
-    <Engine name="Catalina" defaultHost="localhost">
-      <Host name="localhost" appBase="webapps" unpackWARs="true" autoDeploy="true"/>
-    </Engine>
-  </Service>
-</Server>
-EOF
-
-# --- Placeholder HTTP inmediato en $PORT ---
-# Responde "200 OK" con texto mientras arranca Tomcat
-# --- Placeholder HTTP inmediato en $PORT (bien quoteado) ---
-CMD='printf "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nCache-Control: no-cache\r\n\r\nOpenBoxes se está iniciando...\r\n"'
-socat TCP-LISTEN:${PORT},fork,reuseaddr SYSTEM:"bash -lc '$CMD'" &
-PLACEHOLDER_PID=$!
-echo "[start] placeholder HTTP PID=${PLACEHOLDER_PID} escuchando en 0.0.0.0:${PORT}"
-
-
-# --- Arrancar Tomcat en 8080 ---
 export CATALINA_OPTS="${CATALINA_OPTS:-} -Xms256m -Xmx384m -XX:+UseG1GC -Djava.awt.headless=true"
-echo "[start] Arrancando Tomcat en 8080 ..."
-/usr/local/tomcat/bin/catalina.sh start
 
-# --- Esperar a que Tomcat realmente responda HTTP en 8080 ---
-echo "[start] Esperando a que Tomcat responda en http://127.0.0.1:8080/ ..."
-for i in {1..120}; do
-  if curl -sSf -o /dev/null http://127.0.0.1:8080/; then
-    READY=1
-    break
-  fi
-  sleep 2
-done
-if [ "${READY:-0}" -ne 1 ]; then
-  echo "[start] Tomcat no respondió a tiempo, mostrando placeholder indefinidamente."
-  # Mantener el proceso en foreground para que el contenedor no termine
-  tail -f /dev/null
-fi
-
-# --- Tomcat ya está sirviendo: cambiar de placeholder a proxy ---
-echo "[start] Tomcat responde. Cambiando de placeholder a proxy..."
-kill ${PLACEHOLDER_PID} || true
-# pequeño delay para liberar el puerto
-sleep 0.5
-socat TCP-LISTEN:${PORT},fork,reuseaddr TCP:127.0.0.1:8080 &
-PROXY_PID=$!
-echo "[start] proxy socat PID=${PROXY_PID} (0.0.0.0:${PORT} -> 127.0.0.1:8080)"
-
-# --- Poner Tomcat en foreground para que Render vea el proceso principal ---
-exec /usr/local/tomcat/bin/catalina.sh run
-
-
-echo "[start] Arrancando Tomcat en 8080 ..."
+echo "[start] Arrancando Tomcat en 0.0.0.0:${PORT} ..."
+# Ejecuta en foreground para que el contenedor “viva”
 exec /usr/local/tomcat/bin/catalina.sh run
