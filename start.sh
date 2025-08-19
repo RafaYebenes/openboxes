@@ -80,9 +80,12 @@ EOF
 
 # --- Placeholder HTTP inmediato en $PORT ---
 # Responde "200 OK" con texto mientras arranca Tomcat
-socat TCP-LISTEN:${PORT},fork,reuseaddr SYSTEM:'printf "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nCache-Control: no-cache\r\n\r\nOpenBoxes se está iniciando...\n";' &
+# --- Placeholder HTTP inmediato en $PORT (bien quoteado) ---
+CMD='printf "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nCache-Control: no-cache\r\n\r\nOpenBoxes se está iniciando...\r\n"'
+socat TCP-LISTEN:${PORT},fork,reuseaddr SYSTEM:"bash -lc '$CMD'" &
 PLACEHOLDER_PID=$!
 echo "[start] placeholder HTTP PID=${PLACEHOLDER_PID} escuchando en 0.0.0.0:${PORT}"
+
 
 # --- Arrancar Tomcat en 8080 ---
 export CATALINA_OPTS="${CATALINA_OPTS:-} -Xms256m -Xmx384m -XX:+UseG1GC -Djava.awt.headless=true"
