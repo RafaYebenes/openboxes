@@ -2,7 +2,9 @@
 FROM tomcat:9.0-jdk11-temurin
 
 # Instala MariaDB (drop-in de MySQL) y curl
-RUN apt-get update && apt-get install -y mariadb-server curl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y mariadb-server curl && rm -rf /var/lib/apt/lists/* \
+ && mkdir -p /run/mysqld && chown -R mysql:mysql /run/mysqld
+
 
 # Descarga el WAR más reciente de OpenBoxes desde GitHub Releases
 # (Render descargará el asset en cada build)
