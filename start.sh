@@ -64,13 +64,58 @@ cat > "${CATALINA_HOME}/conf/server.xml" <<EOF
 EOF
 
 # --- Abrir YA el puerto que Render espera con un proxy a 8080 ---
-# (Render escaneará $PORT y verá un HTTP abierto de inmediato)
-socat TCP-LISTEN:${PORT},fork,reuseaddr TCP:127.0.0.1:8080 &
-export SOCAT_PID=$!
-echo "[start] socat proxy PID=${SOCAT_PID} (0.0.0.0:${PORT} -> 127.0.0.1:8080)"
+# --- Tomcat: forzar a 8080 (interno) ---
+cat > "${CATALINA_HOME}/conf/server.xml" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<Server port="8005" shutdown="SHUTDOWN">
+  <Service name="Catalina">
+    <Connector address="0.0.0.0" port="8080" protocol="HTTP/1.1"
+               connectionTimeout="20000" redirectPort="8443" />
+    <Engine name="Catalina" defaultHost="localhost">
+      <Host name="localhost" appBase="webapps" unpackWARs="true" autoDeploy="true"/>
+    </Engine>
+  </Service>
+</Server>
+EOF
 
-# --- Limitar memoria para plan Free (~512MB totales) ---
+# --- Placeholder HTTP inmediato en $PORT ---
+# Responde "200 OK" con texto mientras arranca Tomcat
+socat TCP-LISTEN:${PORT},fork,reuseaddr SYSTEM:'printf "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nCache-Control: no-cache\r\n\r\nOpenBoxes se está iniciando...\n";' &
+PLACEHOLDER_PID=$!
+echo "[start] placeholder HTTP PID=${PLACEHOLDER_PID} escuchando en 0.0.0.0:${PORT}"
+
+# --- Arrancar Tomcat en 8080 ---
 export CATALINA_OPTS="${CATALINA_OPTS:-} -Xms256m -Xmx384m -XX:+UseG1GC -Djava.awt.headless=true"
+echo "[start] Arrancando Tomcat en 8080 ..."
+/usr/local/tomcat/bin/catalina.sh start
+
+# --- Esperar a que Tomcat realmente responda HTTP en 8080 ---
+echo "[start] Esperando a que Tomcat responda en http://127.0.0.1:8080/ ..."
+for i in {1..120}; do
+  if curl -sSf -o /dev/null http://127.0.0.1:8080/; then
+    READY=1
+    break
+  fi
+  sleep 2
+done
+if [ "${READY:-0}" -ne 1 ]; then
+  echo "[start] Tomcat no respondió a tiempo, mostrando placeholder indefinidamente."
+  # Mantener el proceso en foreground para que el contenedor no termine
+  tail -f /dev/null
+fi
+
+# --- Tomcat ya está sirviendo: cambiar de placeholder a proxy ---
+echo "[start] Tomcat responde. Cambiando de placeholder a proxy..."
+kill ${PLACEHOLDER_PID} || true
+# pequeño delay para liberar el puerto
+sleep 0.5
+socat TCP-LISTEN:${PORT},fork,reuseaddr TCP:127.0.0.1:8080 &
+PROXY_PID=$!
+echo "[start] proxy socat PID=${PROXY_PID} (0.0.0.0:${PORT} -> 127.0.0.1:8080)"
+
+# --- Poner Tomcat en foreground para que Render vea el proceso principal ---
+exec /usr/local/tomcat/bin/catalina.sh run
+
 
 echo "[start] Arrancando Tomcat en 8080 ..."
 exec /usr/local/tomcat/bin/catalina.sh run
