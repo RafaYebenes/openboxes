@@ -23,5 +23,7 @@ COPY openboxes-config.properties /usr/local/tomcat/.grails/openboxes-config.prop
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
+EXPOSE 10000
+
 EXPOSE 8080
 CMD ["/start.sh"]

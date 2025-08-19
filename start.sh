@@ -63,8 +63,7 @@ cat > "${CATALINA_HOME}/conf/server.xml" <<EOF
 </Server>
 EOF
 
-export CATALINA_OPTS="${CATALINA_OPTS:-} -Xms256m -Xmx384m -XX:+UseG1GC -Djava.awt.headless=true"
 
+export CATALINA_OPTS="${CATALINA_OPTS:-} -Xms512m -Xmx768m -XX:+UseG1GC -Djava.awt.headless=true -Djava.net.preferIPv4Stack=true"
 echo "[start] Arrancando Tomcat en 0.0.0.0:${PORT} ..."
-# Ejecuta en foreground para que el contenedor “viva”
 exec /usr/local/tomcat/bin/catalina.sh run
