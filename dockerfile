@@ -4,8 +4,8 @@ FROM odoo:16.0
 # Paquetes útiles (y cliente PG por si necesitas debug desde el contenedor)
 USER root
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      curl netcat-telnet postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
+    curl netcat-openbsd postgresql-client \
+ && rm -rf /var/lib/apt/lists/*
 
 # (opcional) Asegurar versión de psycopg2
 RUN pip install --no-cache-dir psycopg2-binary==2.9.9
