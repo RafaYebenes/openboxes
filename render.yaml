@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: odoo
+    env: docker
+    plan: free
+    autoDeploy: true
+    region: oregon  # cámbialo si prefieres otra región
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: PGHOST
+        sync: false
+      - key: PGPORT
+        value: "5432"
+      - key: PGUSER
+        sync: false
+      - key: PGPASSWORD
+        sync: false
+      - key: PGDATABASE
+        sync: false
+      # Odoo tunables (opcionales)
+      - key: ODOO_ADMIN_PASSWORD
+        sync: false
+      - key: ODOO_DB_FILTER
+        value: ".*"
+      - key: ODOO_WORKERS
+        value: "0"
+      - key: ODOO_LOG_LEVEL
+        value: "info"
