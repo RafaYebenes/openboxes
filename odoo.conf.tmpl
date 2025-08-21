@@ -1,6 +1,8 @@
 [options]
 ; --- base ---
-admin_passwd = ${ODOO_ADMIN_PASSWORD}
+admin_passwd = ${ADMIN_PASSWD}
+
+; Conexión a Postgres (Neon)
 db_name = ${PGDATABASE}
 db_host = ${PGHOST}
 db_port = ${PGPORT}
@@ -8,27 +10,20 @@ db_user = ${PGUSER}
 db_password = ${PGPASSWORD}
 db_sslmode = require
 
-; Filtrado de DB (útil si compartes servidor)
-dbfilter = ${ODOO_DB_FILTER}
+; Filtrado de DB (vacío si no hace falta)
+dbfilter =
 
-; --- red / proxy ---
-proxy_mode = ${ODOO_PROXY_MODE}
-limit_time_cpu = ${ODOO_LIMIT_TIME_CPU}
-limit_time_real = ${ODOO_LIMIT_TIME_REAL}
+; --- tras proxy ---
+proxy_mode = True
 
-; --- recursos ---
-workers = ${ODOO_WORKERS}
-limit_memory_soft = ${ODOO_LIMIT_MEMORY_SOFT}
-limit_memory_hard = ${ODOO_LIMIT_MEMORY_HARD}
-
-; --- rutas ---
+; --- rutas/log ---
 data_dir = /var/lib/odoo
 logfile = /var/log/odoo/odoo.log
-log_level = ${ODOO_LOG_LEVEL}
+log_level = info
 
-; --- http ---
+; --- red/http ---
 http_interface = 0.0.0.0
-http_port = 8069
+http_port = ${PORT}
 
 ; --- addons ---
 addons_path = /usr/lib/python3/dist-packages/odoo/addons
