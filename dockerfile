@@ -1,29 +1,22 @@
-# Tomcat con Java 11 (compatible con OpenBoxes 0.9.x)
-FROM tomcat:9.0-jdk11-temurin
+# Odoo 16 (LTS)
+FROM odoo:16.0
 
-# Instala MariaDB (drop-in de MySQL) y curl
-RUN apt-get update && apt-get install -y mariadb-server curl && rm -rf /var/lib/apt/lists/* \
- && mkdir -p /run/mysqld && chown -R mysql:mysql /run/mysqld
+# Paquetes útiles (y cliente PG por si necesitas debug desde el contenedor)
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      curl netcat-telnet postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
 
-# Descarga el WAR más reciente de OpenBoxes desde GitHub Releases
-# (Render descargará el asset en cada build)
-RUN curl -s https://api.github.com/repos/openboxes/openboxes/releases/latest \
- | grep browser_download_url | grep openboxes.war | cut -d '"' -f 4 \
- | xargs curl -L -o /usr/local/tomcat/webapps/openboxes.war
+# (opcional) Asegurar versión de psycopg2
+RUN pip install --no-cache-dir psycopg2-binary==2.9.9
 
- # Página mínima para que "/" responda 200 OK desde el segundo 0
-RUN mkdir -p /usr/local/tomcat/webapps/ROOT \
-&& printf 'OpenBoxes se está iniciando...\n' > /usr/local/tomcat/webapps/ROOT/index.html
-
-# Config por defecto en la ruta que Tomcat lee (~/.grails)
-RUN mkdir -p /usr/local/tomcat/.grails
-COPY openboxes-config.properties /usr/local/tomcat/.grails/openboxes-config.properties
-
-# Script de arranque: levanta MariaDB y luego Tomcat en el puerto $PORT de Render
+# Copiamos arranque y plantilla de config
 COPY start.sh /start.sh
+COPY odoo.conf.tmpl /odoo.conf.tmpl
 RUN chmod +x /start.sh
 
-EXPOSE 10000
+# Odoo lee por defecto /etc/odoo/odoo.conf
+ENV ODOO_RC=/etc/odoo/odoo.conf
 
-EXPOSE 8080
+EXPOSE 8069
 CMD ["/start.sh"]
